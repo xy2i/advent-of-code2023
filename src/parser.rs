@@ -45,3 +45,14 @@ impl Iterator for GetInts<'_> {
         }
     }
 }
+
+pub fn parse_num(v: &[u8]) -> u64 {
+    let mut n = 0;
+    for &b in v {
+        if b.is_ascii_digit() {
+            n = n * 10 + u64::from(b & 0xf);
+        }
+    }
+
+    n
+}
