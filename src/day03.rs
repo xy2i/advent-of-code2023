@@ -1,7 +1,4 @@
-use std::{
-    any::Any,
-    collections::{HashMap, HashSet},
-};
+use std::collections::{HashMap, HashSet};
 
 use aoc_runner_derive::{aoc, aoc_generator};
 
@@ -113,7 +110,7 @@ fn solve2(matrix: &Mat) -> u32 {
         let (i, j) = (i as isize, j as isize);
         let mut close_nums = vec![];
         for scan_i in i - 1..=i + 1 {
-            for scan_j in j - 1..=j + 1 {
+            for _ in j - 1..=j + 1 {
                 if scan_i < 0 {
                     continue;
                 }
