@@ -1,5 +1,3 @@
-use std::task::Wake;
-
 #[derive(Debug, Copy, Clone)]
 struct Link {
     left: u16,
@@ -16,26 +14,6 @@ struct Solution<'a> {
 
 impl Solution<'_> {
     pub fn solve(&self) -> u64 {
-        let mut pos = self.aaa as usize;
-        let mut steps = 0;
-
-        for c in self.path.chars().cycle() {
-            pos = match c {
-                'L' => self.tree[pos].left,
-                'R' => self.tree[pos].right,
-                _ => unreachable!(),
-            } as usize;
-
-            steps += 1;
-            if pos == self.zzz as usize {
-                break;
-            };
-        }
-
-        steps
-    }
-
-    pub fn solve2(&self) -> u64 {
         let mut pos = self.aaa as usize;
         let mut steps = 0;
 
@@ -167,8 +145,6 @@ pub fn run2(input: &str) -> u64 {
 
     const TREE_SIZE: usize = 1_000;
     const SENTINEL: u16 = (TREE_SIZE + 1) as u16;
-    const AAA: Id = Id::new(b"AAA");
-    const ZZZ: Id = Id::new(b"ZZZ");
     let mut lut = [SENTINEL; Id::new(b"ZZZ").0 as usize + 1];
     let mut tree = [Link {
         left: 0,
