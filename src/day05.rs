@@ -44,7 +44,6 @@ impl Map {
     fn map_ranges(&self, input: &mut Vec<Range<u32>>, output: &mut Vec<Range<u32>>) {
         for mut r in input.drain(..) {
             while !r.is_empty() {
-                println!("{r:?}");
                 let (&src1, &dst1) = self.set.range(..=r.start).next_back().unwrap();
                 let output2 = self.set.range(r.start + 1..r.end).next();
 
