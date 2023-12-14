@@ -39,7 +39,7 @@ pub fn run(input: &str) -> u64 {
 
     let mut sum = 0;
     for (i, (x1, y1)) in points.iter().enumerate() {
-        for (j, (x2, y2)) in points[i..].iter().enumerate() {
+        for (_, (x2, y2)) in points[i..].iter().enumerate() {
             let start_x = std::cmp::min(x1, x2);
             let start_y = std::cmp::min(y1, y2);
             let end_x = std::cmp::max(x1, x2);
@@ -109,7 +109,7 @@ pub fn run2(input: &str) -> u64 {
 
     let mut sum = 0;
     for (i, (x1, y1)) in points.iter().enumerate() {
-        for (j, (x2, y2)) in points[i..].iter().enumerate() {
+        for (_j, (x2, y2)) in points[i..].iter().enumerate() {
             let start_x = std::cmp::min(x1, x2);
             let start_y = std::cmp::min(y1, y2);
             let end_x = std::cmp::max(x1, x2);

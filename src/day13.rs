@@ -1,7 +1,7 @@
 use aoc_runner_derive::aoc;
 
 #[derive(Debug)]
-struct Pattern {
+pub struct Pattern {
     lines: Vec<Vec<char>>,
     cols: Vec<Vec<char>>,
 }
