@@ -21,7 +21,7 @@ pub fn step((x, y, dir): (i32, i32, Dir)) -> (i32, i32, Dir) {
 
 pub fn p(grid: &Vec<Vec<char>>, pos: &(i32, i32), visited: &HashSet<(i32, i32)>) {
     for (y, l) in grid.iter().enumerate() {
-        for (x, c) in l.iter().enumerate() {
+        for (x, _c) in l.iter().enumerate() {
             if (x as i32, y as i32) == *pos {
                 print!("O")
             } else if visited.contains(&(x as i32, y as i32)) {
