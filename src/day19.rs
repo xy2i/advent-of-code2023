@@ -1,199 +1,140 @@
 use aoc_runner_derive::aoc;
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 
-#[derive(Debug)]
-pub struct Part {
-    x: u16,
-    m: u16,
-    a: u16,
-    s: u16,
+#[derive(Debug, Eq, PartialEq)]
+enum Condition<'a> {
+    Always(&'a str),
+    Ltgt(usize, bool, u32, &'a str),
 }
 
-impl Part {
-    pub fn new(s: &str) -> Self {
-        let mut part = Self {
-            x: 0,
-            m: 0,
-            a: 0,
-            s: 0,
-        };
-        let s = &s[1..s.len() - 1]; // { }
+impl<'a> Condition<'a> {
+    fn split_part(&self, part: Part) -> (&'a str, Option<Part>, Option<Part>) {
+        match *self {
+            Condition::Always(dest) => (dest, Some(part), None),
+            Condition::Ltgt(p, gt, v, dest) => {
+                let relevant_range = part[p];
 
-        for (i, kv) in s.split(',').enumerate() {
-            let kv = &kv[2..]; // trim "x="
-            let kv = kv.as_bytes();
-            match i {
-                0 => part.x = parse_num(kv),
-                1 => part.m = parse_num(kv),
-                2 => part.a = parse_num(kv),
-                3 => part.s = parse_num(kv),
-                _ => unreachable!(),
-            }
-        }
-        part
-    }
+                let (matching, remaining) = split_range(relevant_range, gt, v);
 
-    pub fn rating(&self) -> u16 {
-        self.x + self.m + self.a + self.s
-    }
-}
+                let mut matching_part = None;
+                let mut remaining_part = None;
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
-enum Rule {
-    LtX(u16),
-    GtX(u16),
-    LtM(u16),
-    GtM(u16),
-    LtA(u16),
-    GtA(u16),
-    LtS(u16),
-    GtS(u16),
-}
-
-pub fn parse_num(v: &[u8]) -> u16 {
-    let mut n = 0;
-    for &b in v {
-        if b.is_ascii_digit() {
-            n = n * 10 + u16::from(b & 0xf);
-        }
-    }
-    n
-}
-
-impl Rule {
-    fn new(s: &str) -> Rule {
-        use Rule::*;
-        let n = parse_num(s[2..s.len()].as_bytes());
-        let s = s.as_bytes();
-        match (s[0], s[1]) {
-            (b'x', b'<') => LtX(n),
-            (b'x', b'>') => GtX(n),
-            (b'm', b'<') => LtM(n),
-            (b'm', b'>') => GtM(n),
-            (b'a', b'<') => LtA(n),
-            (b'a', b'>') => GtA(n),
-            (b's', b'<') => LtS(n),
-            (b's', b'>') => GtS(n),
-            _ => unreachable!(),
-        }
-    }
-
-    fn apply(self, part: &Part) -> bool {
-        match self {
-            Rule::LtX(n) => part.x < n,
-            Rule::GtX(n) => part.x > n,
-            Rule::LtM(n) => part.m < n,
-            Rule::GtM(n) => part.m > n,
-            Rule::LtA(n) => part.a < n,
-            Rule::GtA(n) => part.a > n,
-            Rule::LtS(n) => part.s < n,
-            Rule::GtS(n) => part.s > n,
-        }
-    }
-}
-
-#[derive(Debug, PartialEq, Eq)]
-pub struct Workflow<'a> {
-    rules: [Option<Rule>; 4],
-    targets: [Option<&'a str>; 5],
-}
-
-impl<'a> Workflow<'a> {
-    pub fn new(s: &'a str) -> Self {
-        let mut workflow = Self {
-            rules: [None; 4],
-            targets: [None; 5],
-        };
-
-        for (i, entry) in s.split(',').enumerate() {
-            let mid = entry.find(':');
-            match mid {
-                None => {
-                    workflow.targets[i] = Some(entry);
+                if let Some(matching) = matching {
+                    let mut new = part.clone();
+                    new[p] = matching;
+                    matching_part = Some(new);
                 }
-                Some(mid) => {
-                    let (rule, target) = entry.split_at(mid);
-                    let target = &target[1..];
-                    workflow.rules[i] = Some(Rule::new(rule));
-                    workflow.targets[i] = Some(target);
+                if let Some(remaining) = remaining {
+                    let mut new = part.clone();
+                    new[p] = remaining;
+                    remaining_part = Some(new);
                 }
-            }
-        }
 
-        workflow
-    }
-
-    pub fn apply(&self, part: &Part) -> &'a str {
-        for (i, rule) in self.rules.iter().enumerate() {
-            if rule.is_none() {
-                return self.targets[i].unwrap();
-            }
-
-            if self.rules[i].unwrap().apply(part) {
-                return self.targets[i].unwrap();
-            }
-        }
-        unreachable!()
-    }
-}
-
-#[derive(Debug)]
-struct System<'a> {
-    workflows: HashMap<&'a str, Workflow<'a>>,
-}
-
-impl<'a> System<'a> {
-    /// Pass in whole string, will stop at space
-    pub fn new(s: &mut impl Iterator<Item = &'a str>) -> Self {
-        let mut workflows = HashMap::new();
-
-        for line in s {
-            if line.is_empty() {
-                break;
-            }
-
-            let op_bracket = line.find('{').unwrap();
-            let label = &line[..op_bracket];
-            let workflow = &line[op_bracket + 1..line.len() - 1];
-
-            workflows.insert(label, Workflow::new(workflow));
-        }
-
-        Self { workflows }
-    }
-
-    pub fn run(&self, part: &Part) -> bool {
-        let mut current = "in";
-        loop {
-            current = self.workflows[current].apply(part);
-
-            match current {
-                "R" => return false,
-                "A" => return true,
-                _ => (),
+                (dest, matching_part, remaining_part)
             }
         }
     }
 }
 
 #[aoc(day19, part1)]
-pub fn run(s: &str) -> u64 {
-    let mut lines = s.lines();
-    let system = System::new(&mut lines);
+pub fn run(s: &str) -> usize {
+    let (workflows, _items) = s.split_once("\n\n").unwrap();
 
-    lines
-        .map(Part::new)
-        .map(|p| (system.run(&p), p))
-        //.inspect(|x| println!("{x:?}, {}", x.1.rating()))
-        .filter(|&(b, _)| b)
-        .map(|(_, p)| p.rating() as u64)
+    let workflows = workflows
+        .lines()
+        .map(|l| {
+            let l: &str = &l[..l.len() - 1];
+            let (name, l) = l.split_once('{').unwrap();
+            let conds = l
+                .split(',')
+                .map(|c| {
+                    if let Some((cond, dest)) = c.split_once(':') {
+                        let prop = match cond.chars().next().unwrap() {
+                            'x' => 0,
+                            'm' => 1,
+                            'a' => 2,
+                            's' => 3,
+                            _ => unreachable!(),
+                        };
+                        let gtlt = cond.chars().nth(1).unwrap() == '>';
+                        let value: u32 = cond[2..].parse().unwrap();
+
+                        Condition::Ltgt(prop, gtlt, value, dest)
+                    } else {
+                        Condition::Always(c)
+                    }
+                })
+                .collect::<Vec<_>>();
+            (name, conds)
+        })
+        .collect::<HashMap<_, _>>();
+
+    let mut accepted = vec![];
+    let start: Part = [(1, 4000), (1, 4000), (1, 4000), (1, 4000)];
+
+    let mut q = VecDeque::new();
+    q.push_front(("in", start));
+
+    while let Some((label, mut part)) = q.pop_front() {
+        let workflow = &workflows[label];
+
+        for rule in workflow {
+            let (next_label, matching, non_matching) = rule.split_part(part);
+
+            if let Some(matching) = matching {
+                match next_label {
+                    "A" => {
+                        accepted.push(matching);
+                    }
+                    "R" => (), // skip,
+                    _ => q.push_front((next_label, matching)),
+                }
+            }
+
+            if let Some(non_matching) = non_matching {
+                part = non_matching;
+                continue;
+            } else {
+                break;
+            }
+        }
+    }
+
+    accepted
+        .iter()
+        .map(|list| {
+            list.iter()
+                .map(|(start, end)| (end + 1 - start) as usize)
+                .product::<usize>()
+        })
         .sum()
+}
+
+type Part = [(u32, u32); 4];
+
+fn split_range(range: (u32, u32), gt: bool, v: u32) -> (Option<(u32, u32)>, Option<(u32, u32)>) {
+    if gt {
+        if range.0 > v {
+            (Some(range), None)
+        } else if range.1 < v {
+            (None, Some(range))
+        } else {
+            (Some((v + 1, range.1)), Some((range.0, v)))
+        }
+    } else {
+        if range.1 < v {
+            (Some(range), None)
+        } else if range.0 > v {
+            (None, Some(range))
+        } else {
+            (Some((range.0, v - 1)), Some((v, range.1)))
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-
     #[test]
     fn part1() {
         assert_eq!(
