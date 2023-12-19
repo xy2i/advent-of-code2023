@@ -19,6 +19,7 @@ pub fn step((x, y, dir): (i32, i32, Dir)) -> (i32, i32, Dir) {
     }
 }
 
+/*
 pub fn p(grid: &Vec<Vec<char>>, pos: &(i32, i32), visited: &HashSet<(i32, i32)>) {
     for (y, l) in grid.iter().enumerate() {
         for (x, _c) in l.iter().enumerate() {
@@ -33,7 +34,7 @@ pub fn p(grid: &Vec<Vec<char>>, pos: &(i32, i32), visited: &HashSet<(i32, i32)>)
         println!("");
     }
 }
-
+*/
 pub fn beam(s: &str, start: (i32, i32, Dir)) -> u64 {
     use Dir::*;
     let grid = s
