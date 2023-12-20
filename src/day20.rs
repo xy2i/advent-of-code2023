@@ -1,186 +1,129 @@
-use std::collections::hash_map::DefaultHasher;
-use std::collections::{HashMap, HashSet, VecDeque};
-use std::hash::{Hash, Hasher};
-
 use aoc_runner_derive::aoc;
 
-#[derive(Debug, PartialEq, Eq, Hash)]
-enum Mod {
-    Bcast,
-    Flop(bool),      // %
-    Conj(Vec<bool>), // &
-}
-impl Mod {
-    pub fn conj(&mut self) -> &mut Vec<bool> {
-        match self {
-            Self::Conj(c) => c,
-            _ => unreachable!(),
-        }
-    }
+use std::collections::{HashMap, VecDeque};
+
+#[derive(Debug)]
+enum Block<'a> {
+    Broadcast(Vec<&'a str>),
+    FlipFlop(bool, Vec<&'a str>),
+    Conjunction(HashMap<&'a str, bool>, Vec<&'a str>),
 }
 
-fn hash<T: Hash>(t: &T) -> u64 {
-    let mut s = DefaultHasher::new();
-    t.hash(&mut s);
-    s.finish()
+impl<'a> Block<'a> {
+    fn parse(s: &'a str) -> (&'a str, Self) {
+        let (left, out) = s.split_once(" -> ").unwrap();
+        let out: Vec<_> = out.split(", ").collect();
+        if let Some(name) = left.strip_prefix('&') {
+            (name, Block::Conjunction(HashMap::new(), out))
+        } else if let Some(name) = left.strip_prefix('%') {
+            (name, Block::FlipFlop(false, out))
+        } else {
+            (left, Block::Broadcast(out))
+        }
+    }
+
+    fn parse_all(input: &'a str) -> HashMap<&'a str, Self> {
+        let mut circuit: HashMap<&str, Block<'_>> = input.lines().map(Self::parse).collect();
+        let mut inputs: HashMap<&str, HashMap<&str, bool>> = HashMap::new();
+        for (k, v) in &circuit {
+            let k: &&str = k;
+            let out = match v {
+                Block::Broadcast(o) | Block::FlipFlop(_, o) | Block::Conjunction(_, o) => o.clone(),
+            };
+            for o in out {
+                inputs.entry(o).or_default().insert(*k, false);
+            }
+        }
+        for (k, v) in &mut circuit {
+            if let Block::Conjunction(mem, _) = v {
+                *mem = inputs.remove(k).unwrap_or_default();
+            }
+        }
+        circuit
+    }
+
+    fn run(&mut self, origin: &'a str, value: bool) -> (bool, &[&'a str]) {
+        match self {
+            Block::Broadcast(out) => (value, out),
+            Block::FlipFlop(state, out) => {
+                if value {
+                    (false, &[])
+                } else {
+                    *state = !*state;
+                    (*state, out)
+                }
+            }
+            Block::Conjunction(mem, out) => {
+                *mem.entry(origin).or_insert(false) = value;
+                (!mem.values().all(|k| *k), out)
+            }
+        }
+    }
 }
 
 #[aoc(day20, part1)]
-pub fn run(s: &str) -> u64 {
-    // conj_mod -> [in, in, in] to conj
-    //let conj_inputs = HashMap::new();
-
-    let mut state = vec![];
-    let mut mapping = HashMap::new();
-    // reverse mapping
-    let mut conj_mapping = HashMap::new();
-    let mut labels = HashMap::new();
-
-    // labels to indexes
-    for (src_i, l) in s.lines().enumerate() {
-        let (src, _) = l.split_once("->").unwrap();
-        let src = src.trim();
-
-        let (src, modu) = if src == "broadcaster" {
-            (src, Mod::Bcast)
-        } else {
-            let (modu_ty, label) = src.split_at(1);
-            let modu = match modu_ty {
-                "%" => Mod::Flop(false),
-                "&" => Mod::Conj(vec![]),
-                _ => unreachable!(),
-            };
-            (label, modu)
-        };
-
-        state.push(modu);
-        labels.insert(src, src_i);
-    }
-
-    let mut bcast_i = 0;
-    for (src_i, l) in s.lines().enumerate() {
-        let (src, dst) = l.split_once("->").unwrap();
-        let src = src.trim();
-        let dst = dst.trim();
-
-        let src = if src == "broadcaster" {
-            bcast_i = src_i;
-            src
-        } else {
-            let (_, label) = src.split_at(1);
-            label
-        };
-
-        let dst_list = dst
-            .split(", ")
-            .map(|label| *labels.get(&label).unwrap_or(&usize::MAX))
-            .collect::<Vec<_>>();
-
-        mapping.insert(src_i, dst_list.clone());
-
-        for dst_i in dst_list {
-            match state.get_mut(dst_i) {
-                Some(Mod::Conj(v)) => {
-                    let conj_i = v.len();
-                    v.push(false);
-                    conj_mapping.insert((src_i, dst_i), conj_i);
+fn part1(input: &str) -> usize {
+    let mut circuit = Block::parse_all(input);
+    let mut signals = [0, 0];
+    for _ in 0..1000 {
+        let mut waiting = VecDeque::new();
+        waiting.push_back(("button", "broadcaster", false));
+        signals[0] += 1;
+        while let Some((origin, target, value)) = waiting.pop_front() {
+            if let Some(tgt) = circuit.get_mut(target) {
+                let (s, out) = tgt.run(origin, value);
+                signals[usize::from(s)] += out.len();
+                for o in out {
+                    waiting.push_back((target, o, s));
                 }
-                _ => (),
             }
         }
     }
-
-    // simulate cycle
-    let mut cycle: Vec<(u64, u64)> = vec![];
-    let mut state_space = HashSet::new();
-    let (mut cnt_lo, mut cnt_hi) = (0, 0);
-    while state_space.insert(hash(&state)) {
-        // low pulse = false, high = true
-        let mut q: VecDeque<_> = [(bcast_i, false)].into_iter().collect();
-
-        while let Some((src_i, pulse)) = q.pop_front() {
-            //dbg!(src_i, &mapping.get(&src_i), pulse, &state.get(src_i));
-            if pulse {
-                cnt_hi += 1;
-            } else {
-                cnt_lo += 1;
-            }
-
-            if !mapping.contains_key(&src_i) {
-                // it's joever
-                continue;
-            }
-
-            let mut process_conj = vec![];
-
-            match &mut state[src_i] {
-                Mod::Bcast => {
-                    for &dst_i in mapping[&src_i].iter() {
-                        q.push_back((dst_i, false));
-                        if conj_mapping.contains_key(&(src_i, dst_i)) {
-                            process_conj.push((src_i, dst_i, true));
-                        }
-                    }
-                }
-                Mod::Flop(flipflop) => {
-                    //println!("p:{pulse}, f:{flipflop}");
-                    if !pulse {
-                        *flipflop = !*flipflop;
-                        //println!("sending {flipflop}");
-                        for &dst_i in mapping[&src_i].iter() {
-                            q.push_back((dst_i, *flipflop));
-                            if conj_mapping.contains_key(&(src_i, dst_i)) {
-                                process_conj.push((src_i, dst_i, *flipflop));
-                            }
-                        }
-                    }
-                }
-                Mod::Conj(inputs) => {
-                    let output = !inputs.iter().all(|&b| b);
-                    //println!("conj sending {output}");
-                    for &dst_i in mapping[&src_i].iter() {
-                        q.push_back((dst_i, output));
-                        if conj_mapping.contains_key(&(src_i, dst_i)) {
-                            process_conj.push((src_i, dst_i, output));
-                        }
-                    }
-                }
-            }
-
-            for (src_i, dst_i, pulse) in process_conj {
-                let conj_i = conj_mapping[&(src_i, dst_i)];
-                state[dst_i].conj()[conj_i] = pulse;
-            }
-        }
-        dbg!(&cycle);
-    }
-
-    //dbg!(&cycle);
-
-    let lo_cnt = cycle.last().unwrap().0 * (1000 / cycle.len() as u64)
-        + cycle[1_000 % cycle.len()].0 as u64 * (1000 % cycle.len() as u64);
-    let hi_cnt = cycle.last().unwrap().1 * (1000 / cycle.len() as u64)
-        + cycle[1_000 % cycle.len()].1 as u64 * (1000 % cycle.len() as u64);
-
-    lo_cnt * hi_cnt
+    signals[0] * signals[1]
 }
 
-#[test]
-pub fn day20() {
-    assert_eq!(
-        run("broadcaster -> a, b, c
-%a -> b
-%b -> c
-%c -> inv
-&inv -> a"),
-        32000000
-    );
-    assert_eq!(
-        run("broadcaster -> a
-%a -> inv, con
-&inv -> b
-%b -> con
-&con -> output"),
-        11687500
-    )
+#[aoc(day20, part2)]
+fn part2(input: &str) -> usize {
+    let mut circuit = Block::parse_all(input);
+    let mut cycles: HashMap<&str, usize> = circuit
+        .values()
+        .find_map(|v| {
+            if let Block::Conjunction(inp, out) = v {
+                if out.contains(&"rx") {
+                    return Some(inp.keys().map(|n| (*n, 0)));
+                }
+            }
+            None
+        })
+        .unwrap()
+        .collect();
+    dbg!(&cycles);
+
+    for i in 1.. {
+        let mut waiting = VecDeque::new();
+        waiting.push_back(("button", "broadcaster", false));
+        while let Some((origin, target, value)) = waiting.pop_front() {
+            if let Some(tgt) = circuit.get_mut(target) {
+                let (s, out) = tgt.run(origin, value);
+                for o in out {
+                    waiting.push_back((target, o, s));
+                    if !s && cycles.get(o) == Some(&0) {
+                        cycles.insert(*o, i);
+                        if cycles.values().all(|&v| v > 0) {
+                            let mut lcm = 1;
+                            for mut c in cycles.values().copied() {
+                                let d = lcm * c;
+                                while c != 0 {
+                                    (lcm, c) = (c, lcm % c);
+                                }
+                                lcm = d / lcm;
+                            }
+                            return lcm;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    unreachable!()
 }
